@@ -12,7 +12,7 @@ R. Wilmans-Sangwienwong (2019)
 PURPOSE:
 --------
 Generate (a set of) TOTP, based on the SESSION_USER and the existence of that user in the table 'administratie.login.login' (easily changed to whatever) and
-the corresponding secret key ('administratie.login.secret_key').
+the corresponding secret key ('login.secret_key').
 This can be used for either requesting an OTP or used for checking if a provided OTP matche.
 
 PARAMETERS:
