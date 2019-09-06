@@ -1,8 +1,6 @@
 Some functions / snippets of code that I think may be very useful to any postgres-user out there...
 
 
-===========================================================================================================================
-================
 FUNCTION GET_OTP
 ================
 
