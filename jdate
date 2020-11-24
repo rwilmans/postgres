@@ -1,0 +1,82 @@
+CREATE OR REPLACE FUNCTION generic.jdate(jdate ANYELEMENT)
+RETURNS DATE AS 
+$BODY$
+DECLARE
+/* 
+FUNCTION jdate
+
+AUTHOR: 
+-------
+R. Wilmans-Sangwienwong (2020)
+
+PURPOSE: 
+--------
+
+Convert a JDE-date (format CYYDDD) to a regular date
+
+PARAMETERS:
+-----------
+jdate:	Date in JD-Edwards format (CYYDDD, C = 0 : 1900, C=1: 2000, C=2: 2100, YY = 2-digit year, DDD = Julian Day (DoY))
+		Datatype: NUMERIC, INTEGER, BIGINT, TEXT, CHARACTER, CHARACTER VARYING
+		Default : -
+				
+RETURNS: 	
+--------
+DATE: The converted JDE-date
+
+REMARKS:
+--------
+-
+
+Example:
+-- ---------------------------------------------------------------
+SELECT generic.jdate(073308::INTEGER);
+SELECT generic.jdate(073308::BIGINT);
+SELECT generic.jdate(073308::NUMERIC);
+SELECT generic.jdate('073308'::CHARACTER VARYING);
+SELECT generic.jdate('073308'::TEXT);
+SELECT generic.jdate('073308'::CHARACTER(6));
+-- ---------------------------------------------------------------
+*/
+
+_jdate CHARACTER VARYING;
+
+BEGIN
+
+CASE 
+	WHEN PG_TYPEOF(jdate) IN('numeric','integer','bigint') THEN 
+		IF jdate IS NOT NULL AND jdate != 0 THEN 
+			_jdate := LPAD(jdate::CHARACTER VARYING,6,'0')::CHARACTER VARYING(6);
+			IF RIGHT(_jdate,3)::INT >= 1 AND RIGHT(_jdate,3)::INT <= 366 THEN 
+				RETURN (SELECT TO_DATE(CONCAT(19+LEFT(_jdate,1)::INT,RIGHT(_jdate,5)),'YYYYDDD'));
+			ELSE 
+				RETURN NULL::DATE;
+			END IF;
+
+		ELSE
+			-- Dit kan geen geldige JDE-date zijn
+			RETURN NULL::DATE;
+		END IF;
+	WHEN PG_TYPEOF(jdate) IN('text','character varying','character') THEN 
+		IF jdate ~ '^\d{1,6}$' AND jdate::INT >= 1 THEN 
+			_jdate := LPAD(jdate::CHARACTER VARYING,6,'0')::CHARACTER VARYING(6);
+			IF RIGHT(_jdate,3)::INT >= 1 AND RIGHT(_jdate,3)::INT <= 366 THEN 
+				RETURN (SELECT TO_DATE(CONCAT(19+LEFT(_jdate,1)::INT,RIGHT(_jdate,5)),'YYYYDDD'));
+			ELSE 
+				RETURN NULL::DATE;
+			END IF;
+		ELSE
+			-- Dit kan geen geldige JDE-date zijn
+			RETURN NULL::DATE;
+		END IF;
+	ELSE
+		-- Vooralsnog geen datum van maken
+		RAISE NOTICE 'Input (value:%) of unknown type: %',jdate,PG_TYPEOF(jdate);
+		RETURN NULL::DATE;
+END CASE;
+
+END;
+$BODY$
+LANGUAGE plpgsql;
+ALTER FUNCTION generic.jdate OWNER TO dwh_owner;
+GRANT EXECUTE ON FUNCTION generic.jdate TO talend;
