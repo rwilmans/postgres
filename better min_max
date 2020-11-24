@@ -1,0 +1,200 @@
+-- ------------------------------------------------------------------------------------------------------
+-- Rather than first finding the MAX(datum) and then joining to find the corresponding record: 
+CREATE TEMPORARY TABLE raoul (sleutel INTEGER NOT NULL, datum DATE, volgnummer INTEGER);
+CREATE TEMPORARY TABLE raoul2 (sleutel INTEGER NOT NULL, datum DATE, volgnummer INTEGER);
+
+CREATE INDEX idx_raoul__sleutel_datum ON raoul (sleutel, datum);
+CREATE INDEX idx_raoul2__sleutel_datum ON raoul2 (sleutel, datum);
+/*
+DROP INDEX IF EXISTS idx_raoul__sleutel_datum;
+DROP INDEX IF EXISTS idx_raoul2__sleutel_datum;
+*/
+
+CREATE INDEX idx_raoul__datum_sleutel ON raoul (datum, sleutel);
+CREATE INDEX idx_raoul2__datum_sleutel ON raoul2 (datum, sleutel);
+/*
+DROP INDEX IF EXISTS idx_raoul__datum_sleutel;
+DROP INDEX IF EXISTS idx_raoul2__datum_sleutel;
+*/
+
+ /* Vullen van de TP-tabellen */
+INSERT INTO raoul (sleutel, datum, volgnummer)
+SELECT 	CASE 	WHEN	datum >= CURRENT_DATE THEN 2
+				ELSE	1
+		END AS sleutel,
+		datum,
+		serie AS volgnummer
+FROM (	SELECT 	s.serie,
+				(CURRENT_DATE - INTERVAL '80 DAY' + INTERVAL '1 DAY'*(10*s.serie + ROUND(10*RANDOM())))::DATE AS datum
+		FROM (SELECT GENERATE_SERIES(1,16,1) AS serie) AS s
+	  	) AS b
+;
+INSERT INTO raoul2 (sleutel, datum, volgnummer)
+SELECT sleutel, datum, volgnummer FROM raoul;
+
+-- ------------------------------------------------------------------------------------------------------
+ /* Maximum */
+SELECT 	r1.sleutel,
+		r1.datum,
+		r1.volgnummer
+FROM 	raoul AS r1
+LEFT JOIN
+		raoul2 AS r2
+ON 	r1.sleutel = r2.sleutel AND
+	r1.datum < r2.datum
+WHERE r2.sleutel IS NULL
+;
+-- ------------------------------------------------------------------------------------------------------
+ /* Minimum: */
+SELECT 	r1.sleutel,
+		r1.datum,
+		r1.volgnummer
+FROM 	raoul AS r1
+LEFT JOIN
+		raoul2 AS r2
+ON 	r1.sleutel = r2.sleutel AND
+	r1.datum > r2.datum 
+WHERE r2.sleutel IS NULL
+;
+-- ------------------------------------------------------------------------------------------------------
+ /* Met voorwaarde: */
+SELECT 	r1.sleutel,
+		r1.datum
+FROM 	raoul AS r1
+LEFT JOIN
+	raoul2 AS r2
+ON 	r1.sleutel = r2.sleutel AND
+	r1.datum < r2.datum AND 
+	r2.datum <= '2016/01/18'
+WHERE r2.sleutel IS NULL AND r1.datum <= '2016/01/18'
+
+ /* ******************************************** */
+ /* En, om aan te tonen dat het werkt:           */
+DROP TABLE IF EXISTS ntp_tabel;
+CREATE TEMPORARY TABLE ntp_tabel (sleutel INTEGER, datum DATE, tekst TEXT);
+CREATE INDEX ids_ntp_tabel__datum_sleutel ON ntp_tabel (sleutel, datum);
+
+INSERT INTO ntp_tabel (sleutel, datum, tekst) 
+VALUES 	(1, (SELECT (CURRENT_DATE - INTERVAL '80 DAY'*RANDOM())::DATE ),'AAA'),
+		(2, (SELECT (CURRENT_DATE + INTERVAL '80 DAY'*RANDOM())::DATE ),'BBB')
+;
+
+ /* Toon */
+SELECT * FROM ntp_tabel;
+
+ /* ****************** */
+ /* Eerst-vorige datum */
+ /* ****************** */
+SELECT 	r.sleutel, r.datum AS r_datum,
+		p.sleutel, p.datum, p.tekst, p.voor_datum, p.volgnummer
+FROM	raoul AS r
+LEFT JOIN
+	(	SELECT 	n.sleutel,
+				n.datum,
+				n.tekst,
+				r1.datum AS voor_datum,
+				r1.volgnummer
+		FROM 	ntp_tabel AS n
+
+		JOIN	raoul AS r1
+		ON	n.sleutel = r1.sleutel AND
+			r1.datum <= n.datum
+	
+		LEFT JOIN
+				raoul2 AS r2
+		ON 	r1.sleutel = r2.sleutel AND
+			r1.datum < r2.datum AND 
+			r2.datum <= n.datum
+	
+		WHERE r2.sleutel IS NULL
+	  	) AS p
+ON r.datum = p.voor_datum
+;
+
+ /* **************************************** */
+ /* Eerst-volgende datum (minder vaak nodig) */
+ /* **************************************** */
+SELECT 	r.sleutel, r.datum AS r_datum,
+		p.sleutel, p.datum, p.tekst, p.na_datum, p.volgnummer
+FROM	raoul AS r
+LEFT JOIN
+	(	SELECT 	n.sleutel,
+				n.datum,
+				n.tekst,
+				r1.datum AS na_datum,
+				r1.volgnummer
+		FROM 	ntp_tabel AS n
+		JOIN	raoul AS r1
+		ON	n.sleutel = r1.sleutel AND
+			r1.datum >= n.datum
+
+		LEFT JOIN
+				raoul2 AS r2
+		ON 	r1.sleutel = r2.sleutel AND
+			r1.datum > r2.datum AND 
+			r2.datum >= n.datum
+	
+		WHERE 	r2.sleutel IS NULL		
+	 	) AS p
+ON r.datum = p.na_datum
+;
+
+ /* *********************************************************************************************** */
+DROP TABLE IF EXISTS links;
+CREATE TEMPORARY TABLE links (links_id INTEGER, ref_id INTEGER, geldig_vanaf DATE);
+INSERT INTO links (links_id, ref_id, geldig_vanaf) 
+VALUES 	(1,15, '2019/05/01'),
+		(1,15, '2019/08/01'),
+		(3,20, '2019/05/01'),
+		(3,20, '2019/08/01'),
+		(5,25, '2019/05/01'),
+		(5,25, '2019/08/01'),
+		(7,30, '2019/05/01'),
+		(7,30, '2019/08/01'),
+		(9,35, '2019/05/01'),
+		(9,35, '2019/08/01'),
+		(11,40, '2019/05/01'),
+		(11,40, '2019/08/01')
+		;
+
+DROP TABLE IF EXISTS rechts;
+CREATE TEMPORARY TABLE rechts (rechts_id INTEGER, ref_id INTEGER, geldig_vanaf DATE);
+INSERT INTO rechts (rechts_id, ref_id, geldig_vanaf) 
+VALUES 	(2,15, '2019/03/01'),
+		(2,15, '2019/04/01'),
+		(4,20, '2019/04/01'),
+		(4,20, '2019/06/01'),
+		(6,25, '2019/06/01'),
+		(6,25, '2019/07/01'),
+		(8,30, '2019/07/01'),
+		(8,30, '2019/09/01'),
+		(10,35, '2019/09/01'),
+		(10,35, '2019/10/01'),
+		(12,40, '2019/04/01'),
+		(12,40, '2019/09/01')		
+;
+
+WITH l AS (	SELECT 	links_id, 
+					ref_id,
+					geldig_vanaf,
+					LEAD(geldig_vanaf,1,'9999/01/01') OVER (PARTITION BY ref_id ORDER BY geldig_vanaf) AS geldig_tot
+			FROM links),
+	r AS (	SELECT 	rechts_id, 
+					ref_id,
+					geldig_vanaf,
+					LEAD(geldig_vanaf,1,'9999/01/01') OVER (PARTITION BY ref_id ORDER BY geldig_vanaf) AS geldig_tot
+			FROM rechts)
+SELECT 	l.ref_id,
+		l.geldig_vanaf AS l_geldig_vanaf,
+		l.geldig_tot AS l_geldig_tot,
+		r.geldig_vanaf AS r_geldig_vanaf,
+		r.geldig_tot AS r_geldig_tot,
+		GREATEST(l.geldig_vanaf, r.geldig_vanaf) AS geldig_vanaf,
+		LEAST(l.geldig_tot, r.geldig_tot) AS geldig_tot
+FROM 	l
+LEFT JOIN 
+		r
+ON	l.ref_id = r.ref_id AND
+		r.geldig_tot > l.geldig_vanaf AND
+		r.geldig_vanaf < l.geldig_tot
+;
