@@ -1,0 +1,71 @@
+ -- DROP FUNCTION IF EXISTS pervasive_time; 
+CREATE OR REPLACE FUNCTION generic.pervasive_time(ptime INT)
+RETURNS TIME(3) AS 
+$BODY$
+DECLARE
+/* 
+FUNCTION pervasive_time
+
+AUTHOR: 
+-------
+R. Wilmans-Sangwienwong (2020)
+
+PURPOSE: 
+--------
+
+To decode the integer from Pervasive-DB as a Time variable
+
+PARAMETERS:
+-----------
+ptime	:	Variable containing the time-value from pervasive-DB
+			Datatype: INT
+			No default 
+				
+RETURNS: 	
+--------
+TIME(3):	Accurate to milliseconds
+
+REMARKS:
+--------
+The time field is 4 bytes in length where four integers represents the following:
+Hour is byte 4
+Minute is byte 3
+Second is byte 2
+Hundredths of second is byte 1
+
+So if a program reads this as a 4 byte integer then you will have a value that represents a long integer.  For example this number represents this time.
+ 287252224 = 17:31:31
+ 
+The cleanest way (but more complex code):
+SELECT  ((t.tijd & (255 << 24)::BIT(32)) >> 24) ::INT AS uur,
+		((t.tijd & (255 << 16)::BIT(32)) >> 16) ::INT AS minuten,
+		((t.tijd & (255 << 8)::BIT(32)) >> 8) :: INT AS seconden,
+		(t.tijd & 255::BIT(32)) :: INT AS milliseconden
+FROM (	SELECT 287252224::BIT(32) AS tijd) AS t
+ 
+ 
+ 
+Example:
+-- ---------------------------------------------------------------
+SELECT generic.pervasive_time(287252224);
+-- ---------------------------------------------------------------
+*/
+
+BEGIN
+IF (ptime != NULL) THEN 
+	RETURN (SELECT 	MAKE_TIME(	SUBSTR(b.byts,1,8)::BIT(8)::INT,
+						SUBSTR(b.byts,9,8)::BIT(8)::INT,
+						(SUBSTR(b.byts,17,8)::BIT(8)::INT + SUBSTR(b.byts,25,8)::BIT(8)::INT/1000) :: DECIMAL (6,3)
+						)::TIME(3) AS tijd 
+			FROM (	SELECT ptime::BIT(32)::CHARACTER VARYING(32) AS byts
+					) AS b
+			);
+ELSE 
+	-- Niets te doen....
+	RETURN (SELECT MAKE_TIME(0,0,0));
+END IF;
+END;
+$BODY$
+LANGUAGE plpgsql;
+ALTER FUNCTION generic.pervasive_time OWNER TO dwh_owner;
+GRANT EXECUTE ON FUNCTION generic.pervasive_time TO talend, pd_admin_users, web_app_owners, web_app_default_users;
