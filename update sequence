@@ -1,0 +1,67 @@
+--DROP FUNCTION IF EXISTS generic.update_sequence CASCADE;
+CREATE OR REPLACE FUNCTION generic.update_sequence() RETURNS TRIGGER AS 
+$BODY$
+DECLARE
+/* 
+FUNCTION update_sequence
+
+AUTHOR: 
+-------
+R. Wilmans-Sangwienwong (2020)
+
+PURPOSE: 
+--------
+
+Set the next-to-generate sequence ID to be larger than the current MAX(id)
+
+REMARKS:
+--------
+CALL procedure as part of a trigger.
+
+Example:
+-- ---------------------------------------------------------------
+DROP TABLE IF EXISTS test.seqtest CASCADE;
+CREATE TABLE test.seqtest (id SERIAL, tekst CHARACTER VARYING(1));
+CREATE TRIGGER trg_seqtest AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON test.seqtest  FOR EACH STATEMENT EXECUTE PROCEDURE generic.update_sequence();
+INSERT INTO test.seqtest (id, tekst) VALUES (1,'A');
+INSERT INTO test.seqtest (id,tekst) VALUES  (4,'B');
+INSERT INTO test.seqtest (tekst) VALUES  ('C');
+SELECT * FROM test.seqtest;
+-- ---------------------------------------------------------------
+
+*/
+
+_seq_key CHARACTER VARYING;
+_seq_name CHARACTER VARYING;
+_new_value INTEGER;
+_test CHARACTER VARYING;
+
+BEGIN
+
+
+SELECT 	column_name,
+		SPLIT_PART(column_default,'''',2) AS seq
+		INTO 
+		_seq_key,
+		_seq_name
+FROM information_schema.columns
+WHERE 	table_schema = QUOTE_IDENT (TG_TABLE_SCHEMA) AND
+		table_name = QUOTE_IDENT(TG_TABLE_NAME) AND 
+		data_type = 'integer' AND
+		column_default ~'^nextval'
+;		
+
+EXECUTE FORMAT('SELECT COALESCE(MAX(%s),1) FROM %s;', _seq_key, CONCAT(QUOTE_IDENT (TG_TABLE_SCHEMA),'.',QUOTE_IDENT(TG_TABLE_NAME))) INTO _new_value;
+		
+-- _test =  FORMAT('SELECT SETVAL(%s,%s)', QUOTE_LITERAL(_seq_name), _new_value);
+-- RAISE NOTICE '_test:=%',_test;
+-- PERFORM SETVAL(_seq_name, (SELECT COALESCE(MAX(_seq_key),0) FROM _schema_table));
+EXECUTE FORMAT('SELECT SETVAL(%s,%s)', QUOTE_LITERAL(_seq_name), _new_value);
+
+RETURN NEW;
+
+END;
+$BODY$
+LANGUAGE plpgsql;
+ALTER FUNCTION generic.update_sequence OWNER TO dwh_owner;
+GRANT EXECUTE ON FUNCTION generic.update_sequence TO talend, pd_admin_users, web_app_owners, web_app_default_users;
